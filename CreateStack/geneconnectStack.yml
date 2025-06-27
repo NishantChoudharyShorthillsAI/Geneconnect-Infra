@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Importing Geneconnect Infra using CloudFormation IaC
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for EC2
+  SubnetIdA:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for EC2 instance in A Availability Zone
+  SubnetIdB:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet for RDS instance in B Availability Zone
+  InstanceType:
+    Type: String
+    Default: t2.large
+    Description: EC2 instance type
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: geneconnect-key
+    Description: SSH key pair name
+  S3BucketName:
+    Type: String
+    Default: pedigree-project-966551787979-test
+    Description: S3 bucket name for Pedigree Project
+  MasterUsername:
+    Type: String
+    Default: admin
+    Description: RDS master username
+
+Resources:
+
+  ### Security Group for EC2
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App SG for Geneconnect EC2
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8502
+          ToPort: 8502
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  ### Security Group for RDS
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: New Security Group for Geneconnect
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !Ref AppSecurityGroup
+  
+
+  ###  EC2 Instance + Elastic IP
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Sub "{{resolve:ssm:/geneconnect/latest-ami}}"
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetIdA
+      SecurityGroupIds:
+        - !Ref AppSecurityGroup
+        - !Ref RdsSecurityGroup
+      BlockDeviceMappings:
+      - DeviceName: /dev/sda1  # or /dev/sda1 depending on your AMI
+        Ebs:
+          VolumeSize: 50        # Size in GB
+          VolumeType: gp3       # General Purpose SSD (use gp2 if needed)
+          DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update packages
+          apt-get update -y
+
+          # Install AWS CLI (v2)
+          apt-get install -y unzip curl
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          ./aws/install
+
+          # Install MySQL client
+          apt-get install mysql-client -y
+
+          # Install Docker
+          apt-get install docker.io -y
+          systemctl start docker
+          systemctl enable docker
+
+          # Optional: Add ubuntu user to docker group (so you can run Docker without sudo)
+          usermod -aG docker ubuntu
+
+          # Clean up
+          rm -rf awscliv2.zip aws
+      Tags:
+        - Key: Name
+          Value: Geneconnect+DoctorFlow
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref EC2Instance
+      Tags:
+        - Key: Name
+          Value: Geneconnect Dev
+
+  # Subnet Group for RDS
+  GeneconnectDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnets for RDS"
+      SubnetIds:
+        - !Ref SubnetIdA
+        - !Ref SubnetIdB
+  
+  ### RDS MySQL instance “chatapplication”
+  ChatAppDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: chatapplication
+      Engine: mysql
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: 20
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: adminpassword1234
+      VPCSecurityGroups:
+        - !GetAtt AppSecurityGroup.GroupId
+        - !GetAtt RdsSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref GeneconnectDBSubnetGroup
+    DependsOn:
+      - AppSecurityGroup
+      - RdsSecurityGroup
+
+  ### S3 Bucket for Pedigree Project
+  PedigreeProjectBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false   # Allow ACLs if you ever need them
+        BlockPublicPolicy: false   # Allow bucket policies that expose the bucket
+        IgnorePublicAcls: false   # Don’t ignore public ACLs
+        RestrictPublicBuckets: false   # Don’t automatically reject public policies
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      Tags:
+        - Key: Name
+          Value: Pedigree
+
+  PedigreeProjectBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PedigreeProjectBucket
+      PolicyDocument:
+        Version: '2008-10-17'
+        Id: PolicyForCloudFrontPrivateContent
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${PedigreeProjectBucket}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: arn:aws:cloudfront::460719294386:distribution/E27YCKG48PIPZQ
+
+  
+Outputs:
+  InstanceId:
+    Description: EC2 instance ID
+    Value: !Ref EC2Instance
+  PublicIP:
+    Description: Elastic IP address
+    Value: !Ref ElasticIP
+  RDSInstance:
+    Description: RDS instance ID
+    Value: !Ref ChatAppDB
+  RDSHostEndpoint:
+    Description: RDS endpoint to connect to the database
+    Value: !GetAtt ChatAppDB.Endpoint.Address
+  RDSMasterUsername:
+    Description: Master username for RDS login
+    Value: !Ref MasterUsername
+  BucketName:
+    Description: The name of the S3 bucket
+    Value: !Ref PedigreeProjectBucket
+
+
