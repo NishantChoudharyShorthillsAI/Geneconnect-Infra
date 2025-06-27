@@ -51,34 +51,20 @@ jobs:
         run: |
           STACK_NAME="geneconnect-stack"
           REGION="ap-northeast-3"
-
-          RDS_ENDPOINT=$(aws cloudformation describe-stacks \
-            --region $REGION \
-            --stack-name $STACK_NAME \
-            --query "Stacks[0].Outputs[?OutputKey=='RDSHostEndpoint'].OutputValue" \
-            --output text)
-
+          
           EIP=$(aws cloudformation describe-stacks \
             --region $REGION \
             --stack-name $STACK_NAME \
             --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
             --output text)
 
-          echo "RDS Endpoint: $RDS_ENDPOINT"
           echo "Elastic IP: $EIP"
-
-          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
           echo "EIP=$EIP" >> $GITHUB_ENV
 
       - name: SSH Setup Commands on EC2
         run: |
           chmod 400 CreateStack/geneconnect-key.pem
           ssh -o StrictHostKeyChecking=no -i CreateStack/geneconnect-key.pem ubuntu@$EIP <<EOF
-            echo "Connecting MySQL to RDS..."
-            mysql -h $RDS_ENDPOINT -u admin -p${{ secrets.MYSQL_PASSWORD }} -e "
-              SHOW DATABASES;
-              CREATE DATABASE IF NOT EXISTS geneconnect;
-            "
 
             echo "Installing Docker Compose plugin"
             sudo apt-get update
