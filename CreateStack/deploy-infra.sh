@@ -50,15 +50,15 @@ echo "Subnet in AZ B: $SUBNET_ID_B"
 
 
 # Deploy CloudFormation stack
-# aws cloudformation create-stack \
-#     --stack-name "$STACK_NAME" \
-#     --template-body file://geneconnectStack.yml \
-#     --region "$REGION" \
-#     --parameters \
-#         ParameterKey=VpcId,ParameterValue="$VPC_ID" \
-#         ParameterKey=SubnetIdA,ParameterValue="$SUBNET_ID_A" \
-#         ParameterKey=SubnetIdB,ParameterValue="$SUBNET_ID_B" \
-#         ParameterKey=InstanceType,ParameterValue="t2.large" \
-#         ParameterKey=KeyName,ParameterValue="geneconnect-key" \
-#         ParameterKey=S3BucketName,ParameterValue="pedigree-project-$(date +%s)" \
-#         ParameterKey=MasterUsername,ParameterValue="admin"
+aws cloudformation create-stack \
+    --stack-name "$STACK_NAME" \
+    --template-body file://geneconnectStack.yml \
+    --region "$REGION" \
+    --parameters \
+        ParameterKey=VpcId,ParameterValue="$VPC_ID" \
+        ParameterKey=SubnetIdA,ParameterValue="$SUBNET_ID_A" \
+        ParameterKey=SubnetIdB,ParameterValue="$SUBNET_ID_B" \
+        ParameterKey=InstanceType,ParameterValue="t2.large" \
+        ParameterKey=KeyName,ParameterValue="geneconnect-key" \
+        ParameterKey=S3BucketName,ParameterValue="pedigree-project-$(date +%s)" \
+        ParameterKey=MasterUsername,ParameterValue="admin"
