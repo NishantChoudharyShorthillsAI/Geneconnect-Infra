@@ -1,11 +1,20 @@
 #!/bin/bash
 
+# Take REGION as first argument
+REGION="$1"
+
+# Fallback default if not provided
+if [ -z "$REGION" ]; then
+    REGION="ap-northeast-3"
+fi
+
+echo "Using AWS Region in deploy-infra.sh: $REGION"
+
 # Set region and stack name
-REGION="ap-northeast-3"
 STACK_NAME="geneconnect-stack"
 
 # Run script that creates PEM key and AMI ID
-bash key-ami.sh
+bash key-ami.sh "$REGION"
 
 # Get default VPC ID
 VPC_ID=$(aws ec2 describe-vpcs \
@@ -41,15 +50,15 @@ echo "Subnet in AZ B: $SUBNET_ID_B"
 
 
 # Deploy CloudFormation stack
-aws cloudformation create-stack \
-    --stack-name "$STACK_NAME" \
-    --template-body file://geneconnectStack.yml \
-    --region "$REGION" \
-    --parameters \
-        ParameterKey=VpcId,ParameterValue="$VPC_ID" \
-        ParameterKey=SubnetIdA,ParameterValue="$SUBNET_ID_A" \
-        ParameterKey=SubnetIdB,ParameterValue="$SUBNET_ID_B" \
-        ParameterKey=InstanceType,ParameterValue="t2.large" \
-        ParameterKey=KeyName,ParameterValue="geneconnect-key" \
-        ParameterKey=S3BucketName,ParameterValue="pedigree-project-$(date +%s)" \
-        ParameterKey=MasterUsername,ParameterValue="admin"
+# aws cloudformation create-stack \
+#     --stack-name "$STACK_NAME" \
+#     --template-body file://geneconnectStack.yml \
+#     --region "$REGION" \
+#     --parameters \
+#         ParameterKey=VpcId,ParameterValue="$VPC_ID" \
+#         ParameterKey=SubnetIdA,ParameterValue="$SUBNET_ID_A" \
+#         ParameterKey=SubnetIdB,ParameterValue="$SUBNET_ID_B" \
+#         ParameterKey=InstanceType,ParameterValue="t2.large" \
+#         ParameterKey=KeyName,ParameterValue="geneconnect-key" \
+#         ParameterKey=S3BucketName,ParameterValue="pedigree-project-$(date +%s)" \
+#         ParameterKey=MasterUsername,ParameterValue="admin"

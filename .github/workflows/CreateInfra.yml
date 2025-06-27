@@ -2,6 +2,30 @@ name: Deploy Geneconnect AWS Infra
 
 on:
   workflow_dispatch:  # Enables manual trigger from GitHub UI
+    inputs:
+      Region:
+        description: "AWS Region to deploy the infrastructure :"
+        required: true
+        type: choice
+        default: "ap-northeast-3"
+        options:
+          - us-east-1    # N. Virginia
+          - us-east-2    # Ohio
+          - us-west-1    # N. California
+          - us-west-2    # Oregon
+          - ap-south-1   # Mumbai
+          - ap-northeast-3 # Osaka
+          - ap-northeast-2 # Seoul
+          - ap-southeast-1 # Singapore
+          - ap-southeast-2 # Sydney
+          - ap-northeast-1 # Tokyo
+          - ca-central-1 # Canada Central
+          - eu-central-1 # Frankfurt
+          - eu-west-1    # Ireland
+          - eu-west-2    # London
+          - eu-west-3    # Paris
+          - eu-north-1   # Stockholm
+          - sa-east-1    # São Paulo
 
 jobs:
   create:
@@ -21,18 +45,18 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ap-northeast-3   # Change to your desired region
+          aws-region: ${{ github.event.inputs.Region }}   # Change to your desired region
 
       - name: Run Deployment Script
         working-directory: CreateStack
         run: |
           chmod +x deploy-infra.sh
-          ./deploy-infra.sh
+          ./deploy-infra.sh "${{ github.event.inputs.Region }}"
 
       - name: Wait for CloudFormation Completion
         run: |
           STACK_NAME="geneconnect-stack"
-          REGION="ap-northeast-3"
+          REGION="${{ github.event.inputs.Region }}"
           
           echo "Waiting for CloudFormation stack '$STACK_NAME' to complete..."
           aws cloudformation wait stack-create-complete \
@@ -50,7 +74,7 @@ jobs:
         id: cfn
         run: |
           STACK_NAME="geneconnect-stack"
-          REGION="ap-northeast-3"
+          REGION="${{ github.event.inputs.Region }}"
           
           EIP=$(aws cloudformation describe-stacks \
             --region $REGION \
@@ -61,7 +85,7 @@ jobs:
           echo "Elastic IP: $EIP"
           echo "EIP=$EIP" >> $GITHUB_ENV
 
-      - name: SSH Setup Commands on EC2
+      - name: Download Docker Compose Plugin
         run: |
           chmod 400 CreateStack/geneconnect-key.pem
           ssh -o StrictHostKeyChecking=no -i CreateStack/geneconnect-key.pem ubuntu@$EIP <<EOF
