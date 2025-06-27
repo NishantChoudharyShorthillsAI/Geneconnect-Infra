@@ -1,0 +1,30 @@
+name: Delete Geneconnect AWS Infra 
+
+on:
+  workflow_dispatch:  # Enables manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Check AWS CLI version
+        run: |
+          sudo apt update
+          aws --version
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ap-northeast-3   # Change to your desired region
+
+      - name: Run Deployment Script
+        working-directory: DeleteStack
+        run: |
+          chmod +x delete-infra.sh
+          ./delete-infra.sh

@@ -1,0 +1,96 @@
+name: Deploy AWS Infra Manually
+
+on:
+  workflow_dispatch:  # Enables manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Check AWS CLI version
+        run: |
+          sudo apt update
+          aws --version
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ap-northeast-3   # Change to your desired region
+
+      - name: Run Deployment Script
+        working-directory: CreateStack
+        run: |
+          chmod +x deploy-infra.sh
+          ./deploy-infra.sh
+
+      - name: Wait for CloudFormation Completion
+        run: |
+          STACK_NAME="geneconnect-stack"
+          REGION="ap-northeast-3"
+          
+          echo "Waiting for CloudFormation stack '$STACK_NAME' to complete..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name $STACK_NAME \
+            --region $REGION
+          echo "Stack creation complete."
+
+      - name: Upload PEM Key as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: geneconnect-key
+          path: CreateStack/geneconnect-key.pem  # Update this if your script outputs it elsewhere
+      
+      - name: 📥 Fetch Outputs from CloudFormation
+        id: cfn
+        run: |
+          STACK_NAME="geneconnect-stack"
+          REGION="ap-northeast-3"
+
+          RDS_ENDPOINT=$(aws cloudformation describe-stacks \
+            --region $REGION \
+            --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='RDSHostEndpoint'].OutputValue" \
+            --output text)
+
+          EIP=$(aws cloudformation describe-stacks \
+            --region $REGION \
+            --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='PublicIP'].OutputValue" \
+            --output text)
+
+          echo "RDS Endpoint: $RDS_ENDPOINT"
+          echo "Elastic IP: $EIP"
+
+          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
+          echo "EIP=$EIP" >> $GITHUB_ENV
+
+      - name: SSH Setup Commands on EC2
+        run: |
+          chmod 400 CreateStack/geneconnect-key.pem
+          ssh -o StrictHostKeyChecking=no -i CreateStack/geneconnect-key.pem ubuntu@$EIP <<EOF
+            echo "Connecting MySQL to RDS..."
+            mysql -h $RDS_ENDPOINT -u admin -p${{ secrets.MYSQL_PASSWORD }} -e "
+              SHOW DATABASES;
+              CREATE DATABASE IF NOT EXISTS geneconnect;
+            "
+
+            echo "Installing Docker Compose plugin"
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl vim
+            sudo install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o docker.asc
+            sudo mv docker.asc /etc/apt/keyrings/docker.asc
+            sudo chmod a+r /etc/apt/keyrings/docker.asc
+            echo "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo \${UBUNTU_CODENAME:-\${VERSION_CODENAME}}) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-compose-plugin
+          EOF
+
+
+      
