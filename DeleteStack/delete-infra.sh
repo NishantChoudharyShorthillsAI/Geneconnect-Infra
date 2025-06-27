@@ -1,10 +1,19 @@
 #!/bin/bash
 
-# Deleting AMI SSM Parameter, SSH Key Pair
-bash delete-key-ami.sh
+REGION="$1"
 
-# Set region and stack name
-REGION="ap-northeast-3"
+# Fallback default if not provided
+if [ -z "$REGION" ]; then
+    REGION="ap-northeast-3"
+fi
+
+echo "Using AWS Region in deploy-infra.sh: $REGION"
+
+# Deleting AMI SSM Parameter, SSH Key Pair
+bash delete-key-ami.sh "$REGION"
+
+# Set and stack name
+
 STACK_NAME="geneconnect-stack"
 
 # Check if stack exists
@@ -21,13 +30,6 @@ else
     echo "Stack '$STACK_NAME' exists with status: $STACK_STATUS"
 fi
 
-# Confirm deletion
-read -p "Are you sure you want to delete the stack '$STACK_NAME'? Type 'yes' to confirm: " CONFIRM
-
-if [[ "$CONFIRM" != "yes" ]]; then
-    echo "Deletion aborted by user."
-    exit 0
-fi
 
 # Delete the stack
 echo "Initiating stack deletion..."

@@ -1,7 +1,14 @@
 #!/bin/bash
 
 # Variables
-REGION="ap-northeast-3"  # Your AWS region
+REGION="$1"
+
+# Fallback default if not provided
+if [ -z "$REGION" ]; then
+    REGION="ap-northeast-3"
+fi
+
+echo "Using AWS Region in deploy-infra.sh: $REGION"
 KEY_NAME="geneconnect-key"  # Name of the SSH key pair
 SSM_AMI_NAME="/geneconnect/latest-ami"  # SSM Parameter name for AMI
 SSM_KEY_NAME="/geneconnect/ssh-private-key"  # SSM Parameter name for SSH Key
