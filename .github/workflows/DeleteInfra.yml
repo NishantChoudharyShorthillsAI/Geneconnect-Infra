@@ -6,7 +6,12 @@ on:
       confirm_delete:
         description: "Are you sure you want to delete the Geneconnect AWS infrastructure?)"
         required: true
+        type: choice
         default: "no"
+        options:
+          - "yes"
+          - "no"
+        
 
 jobs:
   delete:
