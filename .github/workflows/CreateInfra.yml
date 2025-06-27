@@ -46,7 +46,7 @@ jobs:
           name: geneconnect-key
           path: CreateStack/geneconnect-key.pem  # Update this if your script outputs it elsewhere
       
-      - name: 📥 Fetch Outputs from CloudFormation
+      - name: Fetch Outputs from CloudFormation
         id: cfn
         run: |
           STACK_NAME="geneconnect-stack"
