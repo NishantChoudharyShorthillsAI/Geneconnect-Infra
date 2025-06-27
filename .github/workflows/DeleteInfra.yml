@@ -2,6 +2,11 @@ name: Delete Geneconnect AWS Infra
 
 on:
   workflow_dispatch:  # Enables manual trigger from GitHub UI
+    inputs:
+      confirm_delete:
+        description: "Are you sure you want to delete the Geneconnect AWS infrastructure?)"
+        required: true
+        default: "no"
 
 jobs:
   delete:
@@ -23,8 +28,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ap-northeast-3   # Change to your desired region
 
-      - name: Run Deployment Script
+      - name: Run Delete Stack Script
         working-directory: DeleteStack
         run: |
           chmod +x delete-infra.sh
-          ./delete-infra.sh
+          echo "${{ github.event.inputs.confirm_delete }}" | ./delete-infra.sh
